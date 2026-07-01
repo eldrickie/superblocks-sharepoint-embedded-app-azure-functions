@@ -24,7 +24,7 @@ function getHtml() {
 app.http("embed", {
   methods: ["GET"],
   authLevel: "anonymous",
-  route: "{*path}",
+  route: "/",
   handler: async (request) => {
     return {
       status: 200,
