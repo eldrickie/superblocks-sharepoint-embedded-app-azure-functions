@@ -38,8 +38,8 @@ SharePoint Page
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/superblocksteam/superblocks-embed-sharepoint.git
-   cd superblocks-embed-sharepoint
+   git clone https://github.com/eldrickie/superblocks-sharepoint-embedded-app-azure-functions.git
+   cd superblocks-sharepoint-embedded-app-azure-functions
    ```
 
 2. Install dependencies:

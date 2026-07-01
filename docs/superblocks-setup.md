@@ -66,8 +66,8 @@ After completing these steps, you should have:
 | Value | Env Variable | Example |
 |---|---|---|
 | Embed access token | `SUPERBLOCKS_EMBED_ACCESS_TOKEN` | `sbcXXXXXXXXXXXXXX...` |
-| Group ID | `SUPERBLOCKS_GROUP_ID` | `5124ae7c-baf0-49b8-8cfc-101b791f050a` |
-| Application ID | `SUPERBLOCKS_APPLICATION_ID` | `34db2209-bd80-4b18-b5f6-5f23808fcdc9` |
+| Group ID | `SUPERBLOCKS_GROUP_ID` | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| Application ID | `SUPERBLOCKS_APPLICATION_ID` | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | Superblocks URL | `SUPERBLOCKS_URL` | `https://app.superblocks.com` |
 
 Add these to your `.env` file (for local development) or Azure Function App settings (for production).

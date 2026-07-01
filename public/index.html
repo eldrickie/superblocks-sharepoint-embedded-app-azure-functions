@@ -1,110 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Eldrich SMART App - Patient Viewer</title>
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; color: #222; }
-    .error { color: red; }
-    pre { background: #f4f4f4; padding: 10px; border-radius: 6px; overflow-x: auto; }
-    #sb-slot { margin-top: 30px; height: 720px; border: 1px solid #ccc; border-radius: 10px; overflow: hidden; }
-  </style>
-
-  <!-- Superblocks Embed SDK -->
+  <title>Superblocks Embed</title>
+  <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
   <script src="https://prod-cdn.superblocks.com/packages/@superblocksteam/embed@latest/embed.bundle.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; }
+    #sb-app { width: 100%; height: 100%; }
+    #loading {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100vh; color: #555; gap: 12px;
+    }
+    #loading .spinner {
+      width: 32px; height: 32px; border: 3px solid #e0e0e0;
+      border-top-color: #4f46e5; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #error { display: none; padding: 24px; color: #b91c1c; font-size: 14px; text-align: center; }
+    #sign-in {
+      display: none; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); text-align: center;
+    }
+    #sign-in button {
+      padding: 12px 32px; font-size: 16px; cursor: pointer;
+      background: #4f46e5; color: #fff; border: none; border-radius: 6px;
+      font-family: inherit;
+    }
+    #sign-in button:hover { background: #4338ca; }
+    #sign-in p { margin-top: 8px; color: #666; font-size: 13px; }
+  </style>
 </head>
 <body>
-  <h2>SMART on FHIR Example App</h2>
-  <p id="status">Loading SMART client...</p>
-  <pre id="output"></pre>
-
-  <!-- Container for the embedded Superblocks app -->
-  <div id="sb-slot"></div>
-
-  <!-- SMART client -->
-  <script src="https://cdn.jsdelivr.net/npm/fhirclient@2.3.10/build/fhir-client.min.js"></script>
-
+  <div id="loading"><div class="spinner"></div><span>Loading application...</span></div>
+  <div id="sign-in"><button onclick="signInWithPopup()">Sign in with Microsoft</button><p>Click to authenticate and load the application</p></div>
+  <div id="sb-app"></div>
+  <div id="error"></div>
   <script>
-    function showJSON(obj) {
-      document.getElementById("output").textContent = JSON.stringify(obj, null, 2);
+    var params = new URLSearchParams(window.location.search);
+    var appId = params.get("appId") || "{{SUPERBLOCKS_APPLICATION_ID}}";
+    var loginHint = params.get("loginHint");
+    var domainHint = params.get("domainHint");
+    var AZURE_CLIENT_ID = "{{AZURE_CLIENT_ID}}";
+    var AZURE_TENANT_ID = "{{AZURE_TENANT_ID}}";
+    var SB_BASE_URL = params.get("sbBaseUrl") || "{{SUPERBLOCKS_URL}}";
+
+    function showError(msg) {
+      document.getElementById("loading").style.display = "none";
+      var el = document.getElementById("error");
+      el.style.display = "block";
+      el.textContent = msg;
     }
 
-    FHIR.oauth2.ready(
-      async function (client) {
-        console.log("SMART ready ✅");
-        document.getElementById("status").textContent = "SMART app connected.";
+    if (!appId) { showError("Missing 'appId' query parameter."); }
 
-        const token = client.state?.tokenResponse?.access_token;
-        if (!token) {
-          document.getElementById("status").textContent = "No token found ";
-          console.error("Missing access token:", client.state);
+    var msalConfig = {
+      auth: {
+        clientId: AZURE_CLIENT_ID,
+        authority: "https://login.microsoftonline.com/" + AZURE_TENANT_ID,
+        redirectUri: window.location.origin + window.location.pathname,
+      },
+      cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: true },
+    };
+
+    var msalInstance = new msal.PublicClientApplication(msalConfig);
+
+    function showSignIn() {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("sign-in").style.display = "block";
+    }
+
+    async function signInWithPopup() {
+      document.getElementById("sign-in").style.display = "none";
+      document.getElementById("loading").style.display = "flex";
+      try {
+        var popupRequest = { scopes: ["User.Read"] };
+        if (loginHint) { popupRequest.loginHint = loginHint; }
+        if (domainHint) { popupRequest.domainHint = domainHint; }
+        var resp = await msalInstance.acquireTokenPopup(popupRequest);
+        await loadApp(resp.idToken);
+      } catch (e) {
+        console.error("Popup sign-in failed:", e.message);
+        showError("Sign-in failed: " + e.message);
+      }
+    }
+
+    async function getEntraToken() {
+      var ssoRequest = { scopes: ["User.Read"] };
+      if (loginHint) { ssoRequest.loginHint = loginHint; }
+      if (domainHint) { ssoRequest.domainHint = domainHint; }
+
+      // Attempt 1: ssoSilent (works when third-party cookies are available)
+      try {
+        var resp = await msalInstance.ssoSilent(ssoRequest);
+        return resp.idToken;
+      } catch (e) { console.log("ssoSilent failed:", e.message); }
+
+      // Attempt 2: acquireTokenSilent with cached account
+      var accounts = msalInstance.getAllAccounts();
+      var tenantAccount = accounts.find(function(a) {
+        return a.tenantId === AZURE_TENANT_ID;
+      });
+      var account = tenantAccount || accounts[0];
+      if (account) {
+        try {
+          var resp = await msalInstance.acquireTokenSilent({ scopes: ["User.Read"], account: account });
+          return resp.idToken;
+        } catch (e) { console.log("acquireTokenSilent failed:", e.message); }
+      }
+
+      // Silent methods failed — show sign-in button (popup needs user click to avoid browser blocking)
+      return null;
+    }
+
+    async function loadApp(entraToken) {
+      var tokenRes = await fetch(window.location.origin + "/oauth2/token", {
+        headers: { "Authorization": "Bearer " + entraToken }
+      });
+      if (!tokenRes.ok) {
+        var errData = await tokenRes.json().catch(function() { return {}; });
+        throw new Error(errData.message || "Token exchange failed (" + tokenRes.status + ")");
+      }
+      var tokenData = await tokenRes.json();
+
+      document.getElementById("loading").style.display = "none";
+      var sbApp = Superblocks.createSuperblocksEmbed({
+        id: "sb-app",
+        src: SB_BASE_URL + "/code-mode/embed/applications/" + appId,
+        token: tokenData.access_token,
+      });
+      document.getElementById("sb-app").appendChild(sbApp);
+    }
+
+    async function init() {
+      if (!appId) return;
+      try {
+        await msalInstance.initialize();
+        var redirectResp = await msalInstance.handleRedirectPromise();
+        var entraToken = redirectResp ? redirectResp.idToken : await getEntraToken();
+        if (!entraToken) {
+          // Silent auth failed — show sign-in button for user-initiated popup
+          showSignIn();
           return;
         }
-
-        try {
-          const patient = await client.request(`Patient/${client.patient.id}`);
-          console.log("Patient resource:", patient);
-          document.getElementById("status").textContent =
-            `Loaded patient: ${patient.name?.[0]?.text || "(Unnamed)"}`;
-          showJSON(patient);
-
-          // ---- Extract values for properties ----
-          const nameObj = (patient.name && patient.name[0]) || {};
-          const name =
-            nameObj.text ||
-            [ ...(nameObj.given || []), nameObj.family ].filter(Boolean).join(" ");
-          const dob = patient.birthDate || "";
-          const gender = patient.gender || "";
-
-          function findMRN(p) {
-            const ids = p.identifier || [];
-            const byCode = ids.find(id =>
-              (id.type?.coding || []).some(c =>
-                c.system === "http://terminology.hl7.org/CodeSystem/v2-0203" && c.code === "MR"
-              )
-            );
-            if (byCode) return byCode.value || byCode._value?.extension?.[0]?.valueString || "";
-            const byText = ids.find(id => (id.type?.text || "").toUpperCase() === "MRN");
-            if (byText) return byText.value || byText._value?.extension?.[0]?.valueString || "";
-            return ids[0]?.value || ids[0]?._value?.extension?.[0]?.valueString || "";
-          }
-          const mrn = findMRN(patient);
-
-          const safe = v => (v ?? "").toString();
-
-          // ---- Create and mount Superblocks embed WITH PROPERTIES ----
-          const sbApp = Superblocks.createSuperblocksEmbed({
-            id: "sb-slot",
-            src: "https://app.superblocks.com/embed/applications/8b471cc1-c191-4af8-9e6c-dfc867da028d <OR YOUR APPLICATION URL HERE>",
-            properties: {
-              patientId: safe(client.patient?.id),
-              name: safe(name),
-              dob: safe(dob),
-              gender: safe(gender),
-              mrn: safe(mrn)
-            }
-          });
-
-          const container = document.getElementById("sb-slot");
-          container.innerHTML = "";
-          container.appendChild(sbApp);
-
-          console.log("Superblocks embed mounted  (properties sent)", sbApp);
-        } catch (err) {
-          console.error("Failed to fetch patient data:", err);
-          document.getElementById("status").innerHTML =
-            `<span class='error'>Failed to fetch patient data (Status: ${err.status || "unknown"})</span>`;
-          showJSON(err);
-        }
-      },
-      function (error) {
-        console.error("SMART initialization failed ", error);
-        document.getElementById("status").innerHTML =
-          `<span class='error'>SMART Initialization Error</span>`;
-        showJSON(error);
+        await loadApp(entraToken);
+      } catch (err) {
+        console.error("Embed init error:", err);
+        showError("Failed to load: " + err.message);
       }
-    );
+    }
+
+    init();
   </script>
 </body>
 </html>

@@ -170,7 +170,7 @@ SharePoint blocks iframes from domains not on its allow list. You must add your 
    ```
    Example:
    ```html
-   <iframe src="https://my-sb-embed-proxy.azurewebsites.net/?appId=34db2209-bd80-4b18-b5f6-5f23808fcdc9&domainHint=contoso.onmicrosoft.com" width="100%" height="800" frameborder="0" style="border:none;"></iframe>
+   <iframe src="https://my-sb-embed-proxy.azurewebsites.net/?appId=YOUR_APP_ID&domainHint=contoso.onmicrosoft.com" width="100%" height="800" frameborder="0" style="border:none;"></iframe>
    ```
 4. **Publish** the page (the embed only works on the published page, not in edit mode)
 
