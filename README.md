@@ -1,8 +1,8 @@
 # Superblocks Embed — SharePoint + Entra ID SSO
 
-An Azure Function BFF (Backend for Frontend) proxy that enables embedding Superblocks applications in SharePoint pages with seamless single sign-on via Microsoft Entra ID.
+An Azure Function BFF (Backend for Frontend) proxy that enables embedding Superblocks applications in SharePoint pages with single sign-on via Microsoft Entra ID.
 
-Users who are already logged into SharePoint see the Superblocks app instantly — no additional login prompts, no Superblocks account required.
+Users authenticate once via a popup (since SharePoint iframes block third-party cookies for silent SSO), and then the Superblocks app renders. On subsequent visits, the cached session makes authentication instant.
 
 ## How it works
 
@@ -10,17 +10,21 @@ Users who are already logged into SharePoint see the Superblocks app instantly �
 SharePoint Page
 └── Embed web part (iframe)
     └── Azure Function (this project)
-        ├── GET /*            → Serves HTML page with MSAL.js
+        ├── GET /             → Serves HTML page with MSAL.js
         ├── GET /oauth2/token → Validates Entra token, returns Superblocks session token
         └── GET /health       → Health check
 ```
 
 1. The SharePoint Embed web part loads the Azure Function URL in an iframe.
-2. MSAL.js silently acquires the user's Entra ID token (using the existing M365 session).
-3. The page sends the Entra token to `/oauth2/token`.
-4. The function validates the token against Microsoft's JWKS endpoint, extracts the user's email and name.
-5. The function calls `POST /api/v1/public/token` on the Superblocks API with the user's identity.
-6. Superblocks returns a session token and the Embed SDK renders the app.
+2. MSAL.js attempts silent authentication (`ssoSilent` → `acquireTokenSilent`).
+3. If silent auth fails (expected in cross-origin iframes due to third-party cookie blocking), a **"Sign in with Microsoft"** button appears.
+4. The user clicks the button → a popup opens → since the user is already signed into Microsoft (they're on SharePoint), the popup authenticates instantly and closes.
+5. The page sends the Entra ID token to `/oauth2/token`.
+6. The function validates the token against Microsoft's JWKS endpoint, extracts the user's email and name.
+7. The function calls `POST /api/v1/public/token` on the Superblocks API with the user's identity.
+8. Superblocks returns a session token and the Embed SDK renders the app.
+
+> **Note:** On subsequent visits, `acquireTokenSilent` uses the cached session from step 4, so the user won't see the button again (until the session expires).
 
 ## Prerequisites
 
@@ -89,7 +93,7 @@ az login
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/*` | Serves the embed HTML page (BFF fallback) |
+| `GET` | `/` | Serves the embed HTML page with MSAL.js authentication |
 | `GET` | `/oauth2/token` | Validates Entra ID token and returns a Superblocks session token |
 | `GET` | `/health` | Returns `{"status": "ok"}` |
 
