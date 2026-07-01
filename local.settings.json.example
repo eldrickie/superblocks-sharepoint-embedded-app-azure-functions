@@ -1,0 +1,16 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AZURE_TENANT_ID": "your-entra-tenant-id",
+    "AZURE_CLIENT_ID": "your-entra-app-client-id",
+    "SUPERBLOCKS_EMBED_ACCESS_TOKEN": "your-embed-access-token",
+    "SUPERBLOCKS_GROUP_ID": "your-group-id",
+    "SUPERBLOCKS_URL": "https://app.superblocks.com",
+    "SUPERBLOCKS_APPLICATION_ID": "your-superblocks-app-id"
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}
